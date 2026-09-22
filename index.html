@@ -58,11 +58,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:11px 8px;
       <span>Stell CRM</span>
     </div>
 <nav>
-<button class="nav-btn active" onclick="showSection('spend',this)">💰 Спенди</button>
-<button class="nav-btn" onclick="showSection('caps',this)">🎯 Капи</button>
-<button class="nav-btn" onclick="showSection('myroi',this)">📈 MyROI</button>
-<button class="nav-btn admin-only" onclick="showSection('buyers',this)">👥 Співробітники</button>
-<button class="nav-btn admin-only" onclick="showSection('stats',this)">📊 Статистика</button>
+<button class="nav-btn active" data-section="spend" onclick="showSection('spend',this)">💰 Спенди</button>
+<button class="nav-btn" data-section="caps" onclick="showSection('caps',this)">🎯 Капи</button>
+<button class="nav-btn" data-section="myroi" onclick="showSection('myroi',this)">📈 MyROI</button>
+<button class="nav-btn" data-section="buyers" onclick="showSection('buyers',this)">👥 Співробітники</button>
+<button class="nav-btn" data-section="stats" onclick="showSection('stats',this)">📊 Статистика</button>
 
 </nav>
 <div class="userbox"><div>Акаунт: <b id="currentUserLabel">—</b></div><div id="currentRoleLabel">—</div><button class="logout" onclick="logout()">Вийти</button></div>
@@ -128,6 +128,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:11px 8px;
       <tbody id="employeeRows"></tbody>
     </table>
   </div>
+</div>
+<div id="permissionEditor" class="panel" style="display:none;margin-top:18px;background:#f8fafc">
+  <h2 id="permissionTitle">Доступи співробітника</h2>
+  <div class="note" style="margin-bottom:12px">Можна обрати одразу декілька розділів.</div>
+  <div style="display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:10px;margin-bottom:14px">
+    <label><input type="checkbox" id="permSpends" style="width:auto"> 💰 Спенди</label>
+    <label><input type="checkbox" id="permCaps" style="width:auto"> 🎯 Капи</label>
+    <label><input type="checkbox" id="permMyroi" style="width:auto"> 📈 MyROI</label>
+    <label><input type="checkbox" id="permEmployees" style="width:auto"> 👥 Співробітники</label>
+    <label><input type="checkbox" id="permStatistics" style="width:auto"> 📊 Статистика</label>
+  </div>
+  <div style="display:flex;gap:10px"><button onclick="saveEmployeePermissions()">Зберегти доступи</button><button class="secondary" onclick="closePermissionEditor()">Скасувати</button></div>
+  <div id="permissionStatus" class="note"></div>
 </div>
 </div>
 </div>
@@ -233,6 +246,8 @@ const SUPABASE_KEY='sb_publishable_8NfOSApRQKODYYmZoLBQzQ_Pt9B5Jws';
 let token=null,currentUser=null,currentRole=null,currentUserId=null;
 let data=[],caps=[],geos=[],offers=[],profiles=[];
 const BUYERS=['Trix58','Roman','AKAP','Kaiser','Yow'];
+let currentPermissions={spends:true,caps:true,myroi:true,employees:false,statistics:false};
+let editingPermissionUserId=null;
 
 function money(n){return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -273,9 +288,10 @@ async function setSession(a){token=a.access_token;localStorage.setItem('stellTok
 async function refreshSession(){const refresh_token=localStorage.getItem('stellRefresh');if(!refresh_token)throw new Error('No refresh token');const a=await api('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token})});token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);return a;}
 async function restoreSession(){const t=localStorage.getItem('stellToken'),r=localStorage.getItem('stellRefresh');if(!t&&!r)return;token=t;try{let u;try{u=await api('/auth/v1/user')}catch(_){const a=await refreshSession();u=a.user||await api('/auth/v1/user')}currentUserId=u.id;await loadProfile();applyAccess();await loadAll()}catch(e){logout()}}
 function logout(){token=null;currentUser=null;currentRole=null;currentUserId=null;localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');sessionStorage.removeItem('stellToken');sessionStorage.removeItem('stellRefresh');document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex'}
-async function loadProfile(){const p=await api('/rest/v1/profiles?id=eq.'+currentUserId+'&select=id,buyer_name,role');if(!p?.length)throw new Error('Профіль не знайдено');currentUser=p[0].buyer_name;currentRole=p[0].role;}
-function applyAccess(){document.getElementById('loginScreen').style.display='none';document.getElementById('appShell').style.display='flex';document.getElementById('currentUserLabel').textContent=currentUser;document.getElementById('currentRoleLabel').textContent=currentRole==='admin'?'Адміністратор':'Баєр';document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',currentRole!=='admin'));document.getElementById('buyerField').style.display=currentRole==='admin'?'block':'none';showSection('spend',document.querySelector('.nav-btn'));}
-function showSection(section,btn){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(section+'Section').classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');document.getElementById('pageTitle').textContent=section==='spend'?'Спенди':section==='caps'?'Капи':section==='buyers'?'Співробітники':section==='myroi'?'MyROI':'Статистика';const k=document.getElementById('globalKpis');if(k)k.style.display=section==='buyers'?'none':'';if(section==='stats')renderStats();if(section==='myroi')renderMyROI();}
+async function loadProfile(){const p=await api('/rest/v1/profiles?id=eq.'+currentUserId+'&select=id,buyer_name,role');if(!p?.length)throw new Error('Профіль не знайдено');currentUser=p[0].buyer_name;currentRole=p[0].role;if(currentRole==='admin'){currentPermissions={spends:true,caps:true,myroi:true,employees:true,statistics:true}}else{const rows=await api('/rest/v1/employee_permissions?user_id=eq.'+currentUserId+'&select=spends,caps,myroi,employees,statistics');currentPermissions=rows?.[0]||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}}
+function sectionAllowed(section){if(currentRole==='admin')return true;const map={spend:'spends',caps:'caps',myroi:'myroi',buyers:'employees',stats:'statistics'};return !!currentPermissions[map[section]]}
+function applyAccess(){document.getElementById('loginScreen').style.display='none';document.getElementById('appShell').style.display='flex';document.getElementById('currentUserLabel').textContent=currentUser;document.getElementById('currentRoleLabel').textContent=currentRole==='admin'?'Адміністратор':'Співробітник';document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',currentRole!=='admin'));document.getElementById('buyerField').style.display=currentRole==='admin'?'block':'none';document.querySelectorAll('.nav-btn[data-section]').forEach(b=>b.style.display=sectionAllowed(b.dataset.section)?'':'none');const first=[...document.querySelectorAll('.nav-btn[data-section]')].find(b=>b.style.display!=='none');if(first)showSection(first.dataset.section,first)}
+function showSection(section,btn){if(!sectionAllowed(section)){alert('У тебе немає доступу до цього розділу.');return}document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(section+'Section').classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');document.getElementById('pageTitle').textContent=section==='spend'?'Спенди':section==='caps'?'Капи':section==='buyers'?'Співробітники':section==='myroi'?'MyROI':'Статистика';const k=document.getElementById('globalKpis');if(k)k.style.display=section==='buyers'?'none':'';if(section==='stats')renderStats();if(section==='myroi')renderMyROI();}
 
 async function loadAll(){
  [geos,offers,caps]=await Promise.all([
@@ -326,7 +342,10 @@ async function createBuyer(){
 }
 function employeeRoleLabel(role){return role==='admin'?'Адміністратор':role==='teamlead'?'Тімлід':role==='designer'?'Дизайнер':role==='financier'?'Фінансист':'Баєр'}
 function displayEmployeeName(name){return String(name||'—').toLowerCase()==='yow'?'Yow':name||'—'}
-function renderEmployeeDirectory(){const el=document.getElementById('employeeRows');if(!el||currentRole!=='admin')return;el.innerHTML=profiles.slice().sort((a,b)=>(a.buyer_name||'').localeCompare(b.buyer_name||'')).map(p=>`<tr><td><b>${esc(displayEmployeeName(p.buyer_name))}</b></td><td>${esc(p.email||'—')}</td><td>${employeeRoleLabel(p.position||p.role)}</td><td>${p.role==='admin'?'<span class="note">Admin</span>':`<button class="secondary" onclick="editEmployee('${p.id}')">Редагувати</button>`}</td></tr>`).join('')||'<tr><td colspan="4">Співробітників ще немає</td></tr>'}
+function renderEmployeeDirectory(){const el=document.getElementById('employeeRows');if(!el||currentRole!=='admin')return;el.innerHTML=profiles.slice().sort((a,b)=>(a.buyer_name||'').localeCompare(b.buyer_name||'')).map(p=>`<tr><td><b>${esc(displayEmployeeName(p.buyer_name))}</b></td><td>${esc(p.email||'—')}</td><td>${employeeRoleLabel(p.position||p.role)}</td><td>${p.role==='admin'?'<span class="note">Повний доступ</span>':`<button class="secondary" onclick="editEmployee('${p.id}')">Редагувати</button> <button onclick="editEmployeePermissions('${p.id}')">Доступи</button>`}</td></tr>`).join('')||'<tr><td colspan="4">Співробітників ще немає</td></tr>'}
+async function editEmployeePermissions(id){if(currentRole!=='admin')return;const p=profiles.find(x=>x.id===id);if(!p||p.role==='admin')return;editingPermissionUserId=id;let rows=[];try{rows=await api('/rest/v1/employee_permissions?user_id=eq.'+encodeURIComponent(id)+'&select=spends,caps,myroi,employees,statistics')}catch(e){alert('Не вдалося завантажити доступи: '+e.message);return}const v=rows?.[0]||{spends:true,caps:true,myroi:true,employees:false,statistics:false};document.getElementById('permissionTitle').textContent='Доступи: '+displayEmployeeName(p.buyer_name);document.getElementById('permSpends').checked=!!v.spends;document.getElementById('permCaps').checked=!!v.caps;document.getElementById('permMyroi').checked=!!v.myroi;document.getElementById('permEmployees').checked=!!v.employees;document.getElementById('permStatistics').checked=!!v.statistics;document.getElementById('permissionStatus').textContent='';document.getElementById('permissionEditor').style.display='block';document.getElementById('permissionEditor').scrollIntoView({behavior:'smooth',block:'center'})}
+function closePermissionEditor(){editingPermissionUserId=null;document.getElementById('permissionEditor').style.display='none'}
+async function saveEmployeePermissions(){if(currentRole!=='admin'||!editingPermissionUserId)return;const body={spends:document.getElementById('permSpends').checked,caps:document.getElementById('permCaps').checked,myroi:document.getElementById('permMyroi').checked,employees:document.getElementById('permEmployees').checked,statistics:document.getElementById('permStatistics').checked,updated_by:currentUserId,updated_at:new Date().toISOString()};const status=document.getElementById('permissionStatus');status.textContent='Зберігаю...';try{const existing=await api('/rest/v1/employee_permissions?user_id=eq.'+encodeURIComponent(editingPermissionUserId)+'&select=user_id');if(existing?.length){await api('/rest/v1/employee_permissions?user_id=eq.'+encodeURIComponent(editingPermissionUserId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)})}else{await api('/rest/v1/employee_permissions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({user_id:editingPermissionUserId,...body})})}status.style.color='#16a34a';status.textContent='Доступи збережено. Після наступного входу співробітник побачить нове меню.'}catch(e){status.style.color='#dc2626';status.textContent='Помилка: '+e.message}}
 async function editEmployee(id){if(currentRole!=='admin')return;const p=profiles.find(x=>x.id===id);if(!p)return;const name=prompt('Ім’я / неймінг співробітника:',displayEmployeeName(p.buyer_name));if(name===null)return;const clean=name.trim();if(!clean)return alert('Ім’я не може бути порожнім.');const allowed=['buyer','teamlead','designer','financier'];const position=prompt('Посада: buyer, teamlead, designer або financier',p.position||p.role||'buyer');if(position===null)return;const pos=position.trim().toLowerCase();if(!allowed.includes(pos))return alert('Невідома посада. Використай buyer, teamlead, designer або financier.');try{await api('/rest/v1/profiles?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({buyer_name:clean,position:pos})});await loadAll();alert('Співробітника оновлено.')}catch(e){alert('Не вдалося оновити: '+e.message)}}
 function buyerNames(){return profiles.filter(p=>p.role==='buyer').map(p=>p.buyer_name).filter(Boolean)}
 function refreshBuyerSelect(){const el=document.getElementById('buyer');if(!el)return;const names=buyerNames();el.innerHTML=names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')||'<option value="">Спочатку додай баєра</option>'}
