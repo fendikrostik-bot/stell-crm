@@ -2,41 +2,37 @@
 <html lang="uk">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stell CRM</title></head>
 <body>
-<div id="boot" style="font-family:Arial,sans-serif;padding:30px">Завантаження Stell CRM…</div>
+<div id="boot" style="font-family:Arial,sans-serif;padding:30px;background:#070b14;color:#fff;min-height:100vh">Завантаження Stell CRM…</div>
 <script>
 (async()=>{
   try{
     const source='https://raw.githubusercontent.com/fendikrostik-bot/stell-crm/84807a2928668928605f96b0c40925306b6a4960/index.html';
     let html=await (await fetch(source,{cache:'no-store'})).text();
 
-    // Correct the profile cache field so refresh restores the employee/admin name too.
-    html=html.replace(
-      "localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,buyer_name:currentUser,role:currentRole,permissions:currentPermissions}))",
-      "localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,user:currentUser,role:currentRole,permissions:currentPermissions}))"
-    );
+    html=html.replace("localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,buyer_name:currentUser,role:currentRole,permissions:currentPermissions}))","localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,user:currentUser,role:currentRole,permissions:currentPermissions}))");
+    html=html.replace("document.getElementById('buyerDay').value=todayISO;document.getElementById('buyerMonth').value=todayISO.slice(0,7);","const _buyerDay=document.getElementById('buyerDay'),_buyerMonth=document.getElementById('buyerMonth');if(_buyerDay)_buyerDay.value=todayISO;if(_buyerMonth)_buyerMonth.value=todayISO.slice(0,7);");
+    html=html.replace("document.getElementById('date').value=todayISO;document.getElementById('capMonth').value=todayISO.slice(0,7);","const _date=document.getElementById('date'),_capMonth=document.getElementById('capMonth');if(_date)_date.value=todayISO;if(_capMonth)_capMonth.value=todayISO.slice(0,7);");
+    html=html.replace("document.getElementById('statsFrom').value=todayISO;document.getElementById('statsTo').value=todayISO;document.getElementById('roiDate').value=todayISO.slice(0,7);document.getElementById('roiDateTo').value=todayISO;restoreSession();","const _statsFrom=document.getElementById('statsFrom'),_statsTo=document.getElementById('statsTo'),_roiDate=document.getElementById('roiDate'),_roiDateTo=document.getElementById('roiDateTo');if(_statsFrom)_statsFrom.value=todayISO;if(_statsTo)_statsTo.value=todayISO;if(_roiDate)_roiDate.value=todayISO.slice(0,7);if(_roiDateTo)_roiDateTo.value=todayISO;restoreSession();");
 
-    // The old page referenced buyerDay/buyerMonth fields that no longer exist.
-    // That JavaScript exception happened before restoreSession(), so every F5 looked like logout.
-    html=html.replace(
-      "document.getElementById('buyerDay').value=todayISO;document.getElementById('buyerMonth').value=todayISO.slice(0,7);",
-      "const _buyerDay=document.getElementById('buyerDay'),_buyerMonth=document.getElementById('buyerMonth');if(_buyerDay)_buyerDay.value=todayISO;if(_buyerMonth)_buyerMonth.value=todayISO.slice(0,7);"
-    );
+    html=html.replace('<h2>Stell CRM</h2><p>Увійди у свій акаунт</p>','<div class="login-logo"><img src="logo.jpg"><div><b>STELL <span>CRM</span></b><small>Your traffic. Our analytics. Bigger results.</small></div></div><h2>Вхід у CRM</h2><p>Увійди у свій робочий акаунт</p>');
 
-    // Make startup resilient: session restoration always gets a chance to run.
-    html=html.replace(
-      "document.getElementById('date').value=todayISO;document.getElementById('capMonth').value=todayISO.slice(0,7);",
-      "const _date=document.getElementById('date'),_capMonth=document.getElementById('capMonth');if(_date)_date.value=todayISO;if(_capMonth)_capMonth.value=todayISO.slice(0,7);"
-    );
-    html=html.replace(
-      "document.getElementById('statsFrom').value=todayISO;document.getElementById('statsTo').value=todayISO;document.getElementById('roiDate').value=todayISO.slice(0,7);document.getElementById('roiDateTo').value=todayISO;restoreSession();",
-      "const _statsFrom=document.getElementById('statsFrom'),_statsTo=document.getElementById('statsTo'),_roiDate=document.getElementById('roiDate'),_roiDateTo=document.getElementById('roiDateTo');if(_statsFrom)_statsFrom.value=todayISO;if(_statsTo)_statsTo.value=todayISO;if(_roiDate)_roiDate.value=todayISO.slice(0,7);if(_roiDateTo)_roiDateTo.value=todayISO;restoreSession();"
-    );
-
+    const theme=`<style id="stellDarkTheme">
+:root{--bg:#070b14!important;--card:#0d1422!important;--text:#f3f4f6!important;--muted:#8b96aa!important;--line:#202b3d!important;--accent:#7547ff!important;--green:#38e879!important;--red:#ff5d6c!important}
+html,body{background:#070b14!important;color:#f3f4f6!important}body{background-image:radial-gradient(circle at 80% 0%,rgba(117,71,255,.08),transparent 34%)!important}
+.app-shell{background:#070b14!important}.sidebar{background:linear-gradient(180deg,#101a2d 0%,#0b1322 100%)!important;border-right:1px solid #1b2940!important;box-shadow:18px 0 50px rgba(0,0,0,.16);width:250px!important}.main{margin-left:250px!important;width:calc(100% - 250px)!important;background:transparent!important}
+.brand{color:#fff!important;letter-spacing:.2px}.brand img{border-radius:14px!important;box-shadow:0 0 22px rgba(117,71,255,.22)}.brand small{color:#7f8ca4!important}
+.nav-btn{color:#aeb9cc!important;border:1px solid transparent!important;transition:.2s!important}.nav-btn:hover{background:#151f33!important;color:#fff!important}.nav-btn.active{background:linear-gradient(90deg,rgba(117,71,255,.26),rgba(117,71,255,.08))!important;color:#fff!important;border-color:#6840df!important;box-shadow:inset 3px 0 #8a5cff!important}
+.main header{background:rgba(9,14,24,.88)!important;color:#fff!important;border-bottom:1px solid #1b2638!important;backdrop-filter:blur(12px)}.main header span{color:#8792a6!important}
+.container{max-width:1400px!important}.panel,.card{background:linear-gradient(145deg,#0e1625,#0b111d)!important;border:1px solid #202b3d!important;color:#f3f4f6!important;box-shadow:0 12px 34px rgba(0,0,0,.18)!important}.panel{border-radius:16px!important}.card{border-radius:15px!important}.label,.note,th{color:#8490a5!important}.value{color:#fff!important}
+input,select{background:#0a111d!important;color:#edf1f7!important;border:1px solid #2b3850!important;outline:none!important}input:focus,select:focus{border-color:#7c4dff!important;box-shadow:0 0 0 3px rgba(124,77,255,.12)!important}input::placeholder{color:#68758b!important}button{background:linear-gradient(135deg,#8454ff,#6735ed)!important;box-shadow:0 6px 18px rgba(105,56,237,.18)!important}button:hover{filter:brightness(1.08)}button.secondary{background:#1b2535!important;color:#e7ebf2!important}.danger{background:#3a1821!important;color:#ff8995!important}th,td{border-bottom-color:#202b3d!important}.cap-progress{background:#1c2636!important}.cap-progress>div{background:linear-gradient(90deg,#7142ff,#9a6cff)!important}.green{color:#38e879!important}.red{color:#ff6977!important}
+.userbox{color:#8d99ad!important}.logout{background:#1b2638!important;color:#e8edf5!important}
+.login-screen{background:radial-gradient(circle at 50% 35%,rgba(107,61,238,.16),transparent 32%),linear-gradient(135deg,#050811,#09101d 55%,#070b14)!important}.login-screen:before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:34px 34px;pointer-events:none}.login-card{position:relative;width:min(470px,100%)!important;background:linear-gradient(145deg,rgba(16,25,42,.98),rgba(9,15,27,.98))!important;border:1px solid #493080!important;border-radius:20px!important;padding:34px!important;box-shadow:0 28px 90px rgba(0,0,0,.5),0 0 45px rgba(111,63,238,.10)!important;color:#fff!important}.login-card h2{font-size:18px!important;margin-top:25px!important}.login-card p{color:#8390a5!important}.login-card input{height:48px!important;margin-bottom:12px!important;background:#09111e!important;border-color:#293750!important}.login-card button{height:48px!important;background:linear-gradient(90deg,#8757ff,#6735ed)!important}.login-card button.secondary{background:#172235!important;border:1px solid #2b3850!important}.login-logo{display:flex;align-items:center;gap:15px;padding-bottom:20px;border-bottom:1px solid #202b3d}.login-logo img{width:58px;height:58px;object-fit:cover;border-radius:14px;box-shadow:0 0 28px rgba(122,75,255,.25)}.login-logo b{display:block;font-size:25px;letter-spacing:.5px}.login-logo b span{color:#8a5cff}.login-logo small{display:block;color:#77849a;font-size:11px;margin-top:6px}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-track{background:#080d16}::-webkit-scrollbar-thumb{background:#29364b;border-radius:10px}
+@media(max-width:700px){.sidebar{width:180px!important}.main{margin-left:180px!important;width:calc(100% - 180px)!important}}
+</style>`;
+    html=html.replace('</head>',theme+'</head>');
     document.open();document.write(html);document.close();
-  }catch(e){
-    document.getElementById('boot').innerHTML='<b>Не вдалося завантажити CRM.</b><br>Онови сторінку через кілька секунд.';
-    console.error(e);
-  }
+  }catch(e){document.getElementById('boot').innerHTML='<b>Не вдалося завантажити CRM.</b><br>Онови сторінку через кілька секунд.';console.error(e)}
 })();
 </script>
 </body>
