@@ -298,46 +298,45 @@ async function register(){
    err.textContent='Не вдалося створити акаунт: '+msg;
  }
 }
-async function setSession(a){token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);currentUserId=a.user.id;await loadProfile();applyAccess();await loadAll();}
+async function setSession(a){token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);currentUserId=a.user.id;await loadProfile();localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,user:currentUser,role:currentRole,permissions:currentPermissions}));applyAccess();await loadAll();}
 async function refreshSession(){const refresh_token=localStorage.getItem('stellRefresh');if(!refresh_token)throw new Error('No refresh token');const a=await api('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token})});token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);return a;}
 async function restoreSession(){
- const t=localStorage.getItem('stellToken'),r=localStorage.getItem('stellRefresh');
- if(!t&&!r)return;
- token=t;
- let u=null;
- // Спочатку перевіряємо саме Auth-сесію. Дані CRM не мають права розлогінювати користувача.
- try{
-   u=await api('/auth/v1/user');
- }catch(e){
-   console.warn('Auth check failed, trying refresh:',e);
-   if(r){
-     try{const a=await refreshSession();u=a.user||await api('/auth/v1/user')}catch(re){console.warn('Refresh failed:',re)}
-   }
- }
- if(!u?.id){
-   // Очищаємо сесію тільки коли Auth/refresh реально більше не валідні.
-   token=null;currentUser=null;currentRole=null;currentUserId=null;
-   localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');localStorage.removeItem('stellProfileCache');
-   document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex';
-   return;
- }
- currentUserId=u.id;
- try{
-   await loadProfile();
- }catch(e){
-   console.error('Profile load error, keeping session:',e);
-   // При тимчасовій помилці Supabase використовуємо останній успішно завантажений профіль.
-   try{
-     const cached=JSON.parse(localStorage.getItem('stellProfileCache')||'null');
-     if(cached&&cached.id===currentUserId){currentUser=cached.buyer_name;currentRole=cached.role;currentPermissions=cached.permissions||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}
-     else throw e;
-   }catch(_){
-     document.getElementById('loginError').style.color='#dc2626';document.getElementById('loginError').textContent='Сесія збережена. Не вдалося завантажити профіль — онови сторінку ще раз.';
-     return;
-   }
- }
- applyAccess();
- try{await loadAll()}catch(e){console.error('CRM data load error (session kept):',e)}
+  const t=localStorage.getItem('stellToken'),r=localStorage.getItem('stellRefresh');
+  if(!t&&!r)return;
+  token=t;
+  // Відновлюємо UI з локально збереженої сесії одразу. Мережевий збій не розлогінює.
+  let cached=null;
+  try{cached=JSON.parse(localStorage.getItem('stellProfileCache')||'null')}catch(_){}
+  if(cached?.id){
+    currentUserId=cached.id;currentUser=cached.user;currentRole=cached.role;
+    currentPermissions=cached.permissions||{};
+    applyAccess();
+  }
+  let u=null;
+  try{
+    if(token)u=await api('/auth/v1/user');
+    if(!u?.id&&r){const a=await refreshSession();u=a.user||await api('/auth/v1/user')}
+  }catch(e){console.warn('Session validation temporarily unavailable; keeping saved session:',e)}
+  // Якщо мережа/Auth тимчасово недоступні, не стираємо localStorage і не показуємо логін.
+  if(!u?.id){
+    if(cached?.id){try{await loadAll()}catch(e){console.error('CRM load while offline/session pending:',e)};return}
+    // Без кешу пробуємо витягнути user id з JWT, щоб не викидати користувача на F5.
+    try{
+      const payload=JSON.parse(atob((t||'').split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if(payload?.sub){currentUserId=payload.sub;await loadProfile();applyAccess();try{await loadAll()}catch(e){console.error(e)};return}
+    }catch(e){console.warn('JWT fallback unavailable:',e)}
+    return;
+  }
+  currentUserId=u.id;
+  try{
+    await loadProfile();
+    localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,user:currentUser,role:currentRole,permissions:currentPermissions}));
+    applyAccess();
+    try{await loadAll()}catch(e){console.error('CRM data load error (session kept):',e)}
+  }catch(e){
+    console.error('Profile load error; keeping session:',e);
+    if(cached?.id===currentUserId){currentUser=cached.user;currentRole=cached.role;currentPermissions=cached.permissions||{};applyAccess()}
+  }
 }
 function logout(){token=null;currentUser=null;currentRole=null;currentUserId=null;localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');localStorage.removeItem('stellProfileCache');sessionStorage.removeItem('stellToken');sessionStorage.removeItem('stellRefresh');document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex'}
 async function loadProfile(){const p=await api('/rest/v1/profiles?id=eq.'+currentUserId+'&select=id,buyer_name,role');if(!p?.length)throw new Error('Профіль не знайдено');currentUser=p[0].buyer_name;currentRole=p[0].role;if(currentRole==='admin'){currentPermissions={spends:true,caps:true,myroi:true,employees:true,statistics:true}}else{const rows=await api('/rest/v1/employee_permissions?user_id=eq.'+currentUserId+'&select=spends,caps,myroi,employees,statistics');currentPermissions=rows?.[0]||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,buyer_name:currentUser,role:currentRole,permissions:currentPermissions}))}
