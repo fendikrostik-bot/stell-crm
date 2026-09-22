@@ -300,9 +300,47 @@ async function register(){
 }
 async function setSession(a){token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);currentUserId=a.user.id;await loadProfile();applyAccess();await loadAll();}
 async function refreshSession(){const refresh_token=localStorage.getItem('stellRefresh');if(!refresh_token)throw new Error('No refresh token');const a=await api('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token})});token=a.access_token;localStorage.setItem('stellToken',token);if(a.refresh_token)localStorage.setItem('stellRefresh',a.refresh_token);return a;}
-async function restoreSession(){const t=localStorage.getItem('stellToken'),r=localStorage.getItem('stellRefresh');if(!t&&!r)return;token=t;try{let u;try{u=await api('/auth/v1/user')}catch(e){if(!r)throw e;const a=await refreshSession();u=a.user||await api('/auth/v1/user')}if(!u?.id)throw new Error('Сесію не знайдено');currentUserId=u.id;await loadProfile();applyAccess();try{await loadAll()}catch(e){console.error('CRM data load error:',e)}}catch(e){console.error('Session restore error:',e);token=null;currentUser=null;currentRole=null;currentUserId=null;localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex'}}
-function logout(){token=null;currentUser=null;currentRole=null;currentUserId=null;localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');sessionStorage.removeItem('stellToken');sessionStorage.removeItem('stellRefresh');document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex'}
-async function loadProfile(){const p=await api('/rest/v1/profiles?id=eq.'+currentUserId+'&select=id,buyer_name,role');if(!p?.length)throw new Error('Профіль не знайдено');currentUser=p[0].buyer_name;currentRole=p[0].role;if(currentRole==='admin'){currentPermissions={spends:true,caps:true,myroi:true,employees:true,statistics:true}}else{const rows=await api('/rest/v1/employee_permissions?user_id=eq.'+currentUserId+'&select=spends,caps,myroi,employees,statistics');currentPermissions=rows?.[0]||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}}
+async function restoreSession(){
+ const t=localStorage.getItem('stellToken'),r=localStorage.getItem('stellRefresh');
+ if(!t&&!r)return;
+ token=t;
+ let u=null;
+ // Спочатку перевіряємо саме Auth-сесію. Дані CRM не мають права розлогінювати користувача.
+ try{
+   u=await api('/auth/v1/user');
+ }catch(e){
+   console.warn('Auth check failed, trying refresh:',e);
+   if(r){
+     try{const a=await refreshSession();u=a.user||await api('/auth/v1/user')}catch(re){console.warn('Refresh failed:',re)}
+   }
+ }
+ if(!u?.id){
+   // Очищаємо сесію тільки коли Auth/refresh реально більше не валідні.
+   token=null;currentUser=null;currentRole=null;currentUserId=null;
+   localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');localStorage.removeItem('stellProfileCache');
+   document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex';
+   return;
+ }
+ currentUserId=u.id;
+ try{
+   await loadProfile();
+ }catch(e){
+   console.error('Profile load error, keeping session:',e);
+   // При тимчасовій помилці Supabase використовуємо останній успішно завантажений профіль.
+   try{
+     const cached=JSON.parse(localStorage.getItem('stellProfileCache')||'null');
+     if(cached&&cached.id===currentUserId){currentUser=cached.buyer_name;currentRole=cached.role;currentPermissions=cached.permissions||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}
+     else throw e;
+   }catch(_){
+     document.getElementById('loginError').style.color='#dc2626';document.getElementById('loginError').textContent='Сесія збережена. Не вдалося завантажити профіль — онови сторінку ще раз.';
+     return;
+   }
+ }
+ applyAccess();
+ try{await loadAll()}catch(e){console.error('CRM data load error (session kept):',e)}
+}
+function logout(){token=null;currentUser=null;currentRole=null;currentUserId=null;localStorage.removeItem('stellToken');localStorage.removeItem('stellRefresh');localStorage.removeItem('stellProfileCache');sessionStorage.removeItem('stellToken');sessionStorage.removeItem('stellRefresh');document.getElementById('appShell').style.display='none';document.getElementById('loginScreen').style.display='flex'}
+async function loadProfile(){const p=await api('/rest/v1/profiles?id=eq.'+currentUserId+'&select=id,buyer_name,role');if(!p?.length)throw new Error('Профіль не знайдено');currentUser=p[0].buyer_name;currentRole=p[0].role;if(currentRole==='admin'){currentPermissions={spends:true,caps:true,myroi:true,employees:true,statistics:true}}else{const rows=await api('/rest/v1/employee_permissions?user_id=eq.'+currentUserId+'&select=spends,caps,myroi,employees,statistics');currentPermissions=rows?.[0]||{spends:true,caps:true,myroi:true,employees:false,statistics:false}}localStorage.setItem('stellProfileCache',JSON.stringify({id:currentUserId,buyer_name:currentUser,role:currentRole,permissions:currentPermissions}))}
 function sectionAllowed(section){if(currentRole==='admin')return true;const map={spend:'spends',caps:'caps',myroi:'myroi',buyers:'employees',stats:'statistics'};return !!currentPermissions[map[section]]}
 function applyAccess(){document.getElementById('loginScreen').style.display='none';document.getElementById('appShell').style.display='flex';document.getElementById('currentUserLabel').textContent=currentUser;document.getElementById('currentRoleLabel').textContent=currentRole==='admin'?'Адміністратор':'Співробітник';document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',currentRole!=='admin'));document.getElementById('buyerField').style.display=currentRole==='admin'?'block':'none';document.querySelectorAll('.nav-btn[data-section]').forEach(b=>b.style.display=sectionAllowed(b.dataset.section)?'':'none');const first=[...document.querySelectorAll('.nav-btn[data-section]')].find(b=>b.style.display!=='none');if(first)showSection(first.dataset.section,first)}
 function showSection(section,btn){if(!sectionAllowed(section)){alert('У тебе немає доступу до цього розділу.');return}document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(section+'Section').classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');document.getElementById('pageTitle').textContent=section==='spend'?'Спенди':section==='caps'?'Капи':section==='buyers'?'Співробітники':section==='myroi'?'MyROI':'Статистика';const k=document.getElementById('globalKpis');if(k)k.style.display=section==='buyers'?'none':'';if(section==='stats')renderStats();if(section==='myroi')renderMyROI();}
