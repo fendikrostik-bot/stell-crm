@@ -122,6 +122,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:11px 8px;
           <th>Ім’я / неймінг</th>
           <th>Email</th>
           <th>Посада</th>
+          <th>Дії</th>
         </tr>
       </thead>
       <tbody id="employeeRows"></tbody>
@@ -324,7 +325,9 @@ async function createBuyer(){
  }catch(e){let msg=e.message;try{const j=JSON.parse(msg);msg=j.error||j.message||msg}catch(_){}st.style.color='#dc2626';st.textContent='Не вдалося створити: '+msg}
 }
 function employeeRoleLabel(role){return role==='admin'?'Адміністратор':role==='teamlead'?'Тімлід':role==='designer'?'Дизайнер':role==='financier'?'Фінансист':'Баєр'}
-function renderEmployeeDirectory(){const el=document.getElementById('employeeRows');if(!el||currentRole!=='admin')return;el.innerHTML=profiles.slice().sort((a,b)=>(a.buyer_name||'').localeCompare(b.buyer_name||'')).map(p=>`<tr><td><b>${esc(p.buyer_name||'—')}</b></td><td>${esc(p.email||'—')}</td><td>${employeeRoleLabel(p.position||p.role)}</td></tr>`).join('')||'<tr><td colspan="3">Співробітників ще немає</td></tr>'}
+function displayEmployeeName(name){return String(name||'—').toLowerCase()==='yow'?'Yow':name||'—'}
+function renderEmployeeDirectory(){const el=document.getElementById('employeeRows');if(!el||currentRole!=='admin')return;el.innerHTML=profiles.slice().sort((a,b)=>(a.buyer_name||'').localeCompare(b.buyer_name||'')).map(p=>`<tr><td><b>${esc(displayEmployeeName(p.buyer_name))}</b></td><td>${esc(p.email||'—')}</td><td>${employeeRoleLabel(p.position||p.role)}</td><td>${p.role==='admin'?'<span class="note">Admin</span>':`<button class="secondary" onclick="editEmployee('${p.id}')">Редагувати</button>`}</td></tr>`).join('')||'<tr><td colspan="4">Співробітників ще немає</td></tr>'}
+async function editEmployee(id){if(currentRole!=='admin')return;const p=profiles.find(x=>x.id===id);if(!p)return;const name=prompt('Ім’я / неймінг співробітника:',displayEmployeeName(p.buyer_name));if(name===null)return;const clean=name.trim();if(!clean)return alert('Ім’я не може бути порожнім.');const allowed=['buyer','teamlead','designer','financier'];const position=prompt('Посада: buyer, teamlead, designer або financier',p.position||p.role||'buyer');if(position===null)return;const pos=position.trim().toLowerCase();if(!allowed.includes(pos))return alert('Невідома посада. Використай buyer, teamlead, designer або financier.');try{await api('/rest/v1/profiles?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({buyer_name:clean,position:pos})});await loadAll();alert('Співробітника оновлено.')}catch(e){alert('Не вдалося оновити: '+e.message)}}
 function buyerNames(){return profiles.filter(p=>p.role==='buyer').map(p=>p.buyer_name).filter(Boolean)}
 function refreshBuyerSelect(){const el=document.getElementById('buyer');if(!el)return;const names=buyerNames();el.innerHTML=names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')||'<option value="">Спочатку додай баєра</option>'}
 function refreshStatsBuyerSelect(){const el=document.getElementById('statsBuyer');if(!el)return;const cur=el.value;const names=buyerNames();el.innerHTML='<option value="">Всі баєри</option>'+names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');el.value=names.includes(cur)?cur:''}
