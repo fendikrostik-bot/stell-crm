@@ -124,18 +124,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:11px 8px;
           <th>Посада</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td><b>Yow</b></td>
-          <td>fomin.two@gmail.com</td>
-          <td>Баєр</td>
-        </tr>
-        <tr>
-          <td><b>AKAP</b></td>
-          <td>kopystianskii@gmail.com</td>
-          <td>Баєр</td>
-        </tr>
-      </tbody>
+      <tbody id="employeeRows"></tbody>
     </table>
   </div>
 </div>
@@ -242,7 +231,7 @@ const SUPABASE_URL='https://qqttacfwejuwqhrhjbut.supabase.co';
 const SUPABASE_KEY='sb_publishable_8NfOSApRQKODYYmZoLBQzQ_Pt9B5Jws';
 let token=null,currentUser=null,currentRole=null,currentUserId=null;
 let data=[],caps=[],geos=[],offers=[],profiles=[];
-const BUYERS=['Trix58','Roman','AKAP','Kaiser'];
+const BUYERS=['Trix58','Roman','AKAP','Kaiser','Yow'];
 
 function money(n){return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -291,8 +280,8 @@ async function loadAll(){
  [geos,offers,caps]=await Promise.all([
   api('/rest/v1/geos?select=id,name&order=name'),api('/rest/v1/offers?select=id,name&order=name'),api('/rest/v1/caps?select=id,month,cap_amount,currency,geo_id,offer_id&order=month.desc')]);
  const raw=await api('/rest/v1/spends?select=id,user_id,spend_date,geo_id,offer_id,amount&order=spend_date.desc');
- profiles=currentRole==='admin'?await api('/rest/v1/profiles?select=id,buyer_name,role'): [{id:currentUserId,buyer_name:currentUser,role:currentRole}];
- if(currentRole==='admin'){refreshBuyerSelect();refreshStatsBuyerSelect();refreshRoiBuyerSelect();}
+ profiles=currentRole==='admin'?await api('/rest/v1/profiles?select=id,buyer_name,role,email,position'): [{id:currentUserId,buyer_name:currentUser,role:currentRole}];
+ if(currentRole==='admin'){refreshBuyerSelect();refreshStatsBuyerSelect();refreshRoiBuyerSelect();renderEmployeeDirectory();}
  data=raw.map(x=>({...x,date:x.spend_date,spend:Number(x.amount),geo:geos.find(g=>g.id===x.geo_id)?.name||'',offer:offers.find(o=>o.id===x.offer_id)?.name||'',buyer:profiles.find(p=>p.id===x.user_id)?.buyer_name||currentUser}));
  const usage=await api('/rest/v1/rpc/cap_usage',{method:'POST',body:'{}'});window.capUsage=usage||[];updateGeoList();render();renderCaps();renderBuyers();renderStats();renderMyROI();
 }
@@ -334,6 +323,8 @@ async function createBuyer(){
   await loadAll();
  }catch(e){let msg=e.message;try{const j=JSON.parse(msg);msg=j.error||j.message||msg}catch(_){}st.style.color='#dc2626';st.textContent='Не вдалося створити: '+msg}
 }
+function employeeRoleLabel(role){return role==='admin'?'Адміністратор':role==='teamlead'?'Тімлід':role==='designer'?'Дизайнер':role==='financier'?'Фінансист':'Баєр'}
+function renderEmployeeDirectory(){const el=document.getElementById('employeeRows');if(!el||currentRole!=='admin')return;el.innerHTML=profiles.slice().sort((a,b)=>(a.buyer_name||'').localeCompare(b.buyer_name||'')).map(p=>`<tr><td><b>${esc(p.buyer_name||'—')}</b></td><td>${esc(p.email||'—')}</td><td>${employeeRoleLabel(p.position||p.role)}</td></tr>`).join('')||'<tr><td colspan="3">Співробітників ще немає</td></tr>'}
 function buyerNames(){return profiles.filter(p=>p.role==='buyer').map(p=>p.buyer_name).filter(Boolean)}
 function refreshBuyerSelect(){const el=document.getElementById('buyer');if(!el)return;const names=buyerNames();el.innerHTML=names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')||'<option value="">Спочатку додай баєра</option>'}
 function refreshStatsBuyerSelect(){const el=document.getElementById('statsBuyer');if(!el)return;const cur=el.value;const names=buyerNames();el.innerHTML='<option value="">Всі баєри</option>'+names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');el.value=names.includes(cur)?cur:''}
